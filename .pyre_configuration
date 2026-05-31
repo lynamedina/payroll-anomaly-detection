@@ -1,0 +1,9 @@
+{
+  "source_directories": [
+    "src"
+  ],
+  "site_roots": [
+    "c:\\Users\\PC\\Documents\\LMG\\PFE\\Projet\\payroll-anomaly-detection\\.venv\\Lib\\site-packages"
+  ],
+  "site_package_search_strategy": "all"
+}
