@@ -87,8 +87,8 @@ def preprocess_payroll(path: str = PATHS["payroll"]) -> pd.DataFrame:
 
     Returns:
         pd.DataFrame: Cleaned and normalized payroll dataframe ready for
-                      model training (Random Forest, Gradient Boosting,
-                      ANN, Isolation Forest).
+                    model training (Random Forest, Gradient Boosting,
+                    ANN, Isolation Forest).
     """
     print(f"\n[1/4] Loading payroll dataset from: {path}")
     df = pd.read_csv(path)
@@ -102,6 +102,20 @@ def preprocess_payroll(path: str = PATHS["payroll"]) -> pd.DataFrame:
     df = df[df["base_salary"] > 0]
     df = df[df["net_pay"] > 0]
     print(f"  Removed {initial_len - len(df)} invalid/duplicate rows")
+    # ── Feature Engineering: financial ratios ──
+    # These ratios directly capture anomaly patterns:
+    #   net_to_gross > 1.0      → net_exceeds_gross anomaly
+    #   tax_rate == 0           → missing_tax anomaly
+    #   bonus_rate > 0.5        → bonus_exceeded anomaly
+    #   deduction_rate == 0     → zero_deductions anomaly
+    df["tax_rate"]          = df["tax"] / df["base_salary"].replace(0, np.nan)
+    df["net_to_gross_ratio"] = df["net_pay"] / df["base_salary"].replace(0, np.nan)
+    df["bonus_rate"]        = df["bonus"] / df["base_salary"].replace(0, np.nan)
+    df["ss_rate"]           = df["social_security"] / df["base_salary"].replace(0, np.nan)
+    df["total_deduction_rate"] = (df["tax"] + df["social_security"]) / df["base_salary"].replace(0, np.nan)
+    # Fill any resulting NaN/inf from division (edge cases) with 0
+    ratio_cols = ["tax_rate", "net_to_gross_ratio", "bonus_rate", "ss_rate", "total_deduction_rate"]
+    df[ratio_cols] = df[ratio_cols].replace([np.inf, -np.inf], np.nan).fillna(0)
 
     # ── Encode categorical columns
     cat_cols = ["country", "currency", "role", "department"]
@@ -110,7 +124,7 @@ def preprocess_payroll(path: str = PATHS["payroll"]) -> pd.DataFrame:
         df[col] = le.fit_transform(df[col].astype(str))
 
     # ── Normalize numerical columns (exclude labels and IDs)
-    num_cols = ["base_salary", "bonus", "tax", "social_security", "net_pay"]
+    num_cols = ["base_salary", "bonus", "tax", "social_security", "net_pay"] + ratio_cols
     scaler = MinMaxScaler()
     df[num_cols] = scaler.fit_transform(df[num_cols])
 

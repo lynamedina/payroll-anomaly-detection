@@ -75,7 +75,9 @@ MODEL_FILES = ["random_forest.pkl", "gradient_boosting.pkl", "ann.pkl", "isolati
 
 FEATURE_COLS = ["country", "currency", "role", "department",
                 "years_experience", "base_salary", "bonus",
-                "tax", "social_security", "net_pay"]
+                "tax", "social_security", "net_pay",
+                "tax_rate", "net_to_gross_ratio", "bonus_rate",
+                "ss_rate", "total_deduction_rate"]
 
 
 # ─── Load Data & Models ───────────────────────────────────────────────────────

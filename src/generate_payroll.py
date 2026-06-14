@@ -1,5 +1,14 @@
 import pandas as pd
 import numpy as np
+import random
+from datetime import datetime, timedelta
+
+def random_date(start_year=2023, months=6):
+    """Generate a random date within the last 6 months."""
+    start = datetime(start_year, 1, 1)
+    end   = datetime(start_year, 6, 30)
+    delta = end - start
+    return (start + timedelta(days=random.randint(0, delta.days))).strftime("%Y-%m-%d")
 
 np.random.seed(42)
 
@@ -91,9 +100,15 @@ for i in range(N):
         "anomaly_type":   anomaly_type,
         "department":     np.random.choice(departments),
         "years_experience": round(np.random.uniform(0, 30), 1),
+        "pay_month": random.randint(1, 6),
+        "pay_year": 2023,
+        "pay_date": (datetime(2023, 1, 1) + timedelta(days=random.randint(0, 180))).strftime("%Y-%m-%d"),
     })
 
 df = pd.DataFrame(records)
+df["pay_date"]  = pd.to_datetime(df["pay_date"])
+df["pay_month"] = df["pay_date"].dt.month
+df["pay_year"]  = df["pay_date"].dt.year
 df.to_csv("../data/synthetic_global_payroll.csv", index=False)
 print(df["anomaly_type"].value_counts())
 print(f"\n{df['is_anomaly'].sum()} anomalies out of {len(df)} rows")

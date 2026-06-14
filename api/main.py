@@ -16,13 +16,14 @@ Usage:
 
     Then open: http://localhost:8000/docs  (Swagger UI — auto-generated)
 
-Author: [Lyna Medina Gassouma]
+Author: Lyna Medina Gassouma
 Project: Intelligent Anomaly Detection in Global Payroll Data — ADP
 """
 
 import os
 import pickle
 import numpy as np
+import shap
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -107,6 +108,39 @@ def load_model():
 
 model = load_model()
 
+# SHAP TreeExplainer — created once at startup, reused for all /explain calls
+shap_explainer = shap.TreeExplainer(model)
+
+
+def get_shap_for_record(features: np.ndarray) -> dict:
+    """
+    Computes SHAP values for a single payroll record.
+
+    SHAP (SHapley Additive exPlanations) decomposes the model's prediction
+    into per-feature contributions: how much each feature pushed the
+    anomaly score UP (positive) or DOWN (negative) relative to the
+    average prediction (base_value).
+
+    Handles differences across SHAP library versions where shap_values()
+    may return a list [class0, class1] or a single 3D/2D array.
+
+    Args:
+        features (np.ndarray): Shape (1, 10) encoded feature vector.
+
+    Returns:
+        dict: {feature_name: shap_contribution} for class "anomaly" (1).
+    """
+    raw = shap_explainer.shap_values(features)
+
+    if isinstance(raw, list):
+        sv = raw[1][0]
+    elif raw.ndim == 3:
+        sv = raw[0, :, 1]
+    else:
+        sv = raw[0]
+
+    return {col: round(float(val), 4) for col, val in zip(FEATURE_COLS, sv)}
+
 # ─── Request / Response Schemas ───────────────────────────────────────────────
 
 class PayrollRecord(BaseModel):
@@ -171,8 +205,8 @@ class ExplainResponse(BaseModel):
         is_anomaly         : Prediction result
         anomaly_score      : Probability score
         risk_level         : Risk label
-        top_features       : Top 3 features that most influenced the decision
-        feature_scores     : All feature importance scores
+        top_features       : Top 3 features by SHAP impact for this record
+        feature_scores     : SHAP contribution per feature (signed: + increases anomaly score, - decreases it)
         anomaly_indicators : Specific rules triggered by the input values
         recommendation     : Suggested action for HR/payroll team
     """
@@ -401,7 +435,7 @@ def explain(record: PayrollRecord):
 
     Returns:
         ExplainResponse: Full prediction + feature scores + triggered rules
-                         + recommended action.
+                        + recommended action.
     """
     features   = encode_record(record)
     prediction = model.predict(features)[0]
@@ -409,16 +443,12 @@ def explain(record: PayrollRecord):
     is_anomaly = bool(prediction == 1)
     risk_level = get_risk_level(score)
 
-    # Global feature importance from Random Forest
-    importances   = model.feature_importances_
-    feature_scores = {
-        col: round(float(imp), 4)
-        for col, imp in zip(FEATURE_COLS, importances)
-    }
+    # Per-record SHAP contributions (replaces global feature importance)
+    feature_scores = get_shap_for_record(features)
 
-    # Top 3 most important features for this model
+    # Top 3 features by absolute SHAP impact for THIS record
     sorted_features = sorted(feature_scores.items(),
-                             key=lambda x: x[1], reverse=True)
+                             key=lambda x: abs(x[1]), reverse=True)
     top_features = [
         {"feature": k, "importance": v, "value": float(features[0][i])}
         for i, (k, v) in enumerate(sorted_features[:3])
