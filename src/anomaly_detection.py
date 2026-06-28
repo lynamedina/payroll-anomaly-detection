@@ -144,6 +144,15 @@ def load_payroll_data(path: str = PAYROLL_PATH):
     X = df[feature_cols].values
     y = df["is_anomaly"].values
 
+    # Save scaler for API use
+    from sklearn.preprocessing import MinMaxScaler
+    import pickle
+    scaler = MinMaxScaler()
+    scaler.fit(X)
+    with open("../models/scaler.pkl", "wb") as f:
+        pickle.dump(scaler, f)
+    print("  Scaler saved → ../models/scaler.pkl")
+
     # Split BEFORE resampling — test set must stay original
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y

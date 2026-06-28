@@ -24,6 +24,7 @@ import os
 import pickle
 import numpy as np
 import shap
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -36,16 +37,16 @@ MODEL_PATH = os.path.join(MODELS_DIR, "random_forest.pkl")
 
 # ─── Feature Configuration ────────────────────────────────────────────────────
 
-FEATURE_COLS = [
-    "country", "currency", "role", "department",
-    "years_experience", "base_salary", "bonus",
-    "tax", "social_security", "net_pay"
-]
+FEATURE_COLS = ["country", "currency", "role", "department",
+                "years_experience", "base_salary", "bonus",
+                "tax", "social_security", "net_pay",
+                "tax_rate", "net_to_gross_ratio", "bonus_rate",
+                "ss_rate", "total_deduction_rate"]
 
 # Label encoding maps — must match preprocessing.py LabelEncoder output
 # These are the alphabetical orderings sklearn's LabelEncoder uses
 COUNTRY_MAP = {"AU": 0, "BR": 1, "CA": 2, "DE": 3, "FR": 4,
-               "IN": 5, "JP": 6, "TN": 7, "UK": 8, "US": 9}
+            "IN": 5, "JP": 6, "TN": 7, "UK": 8, "US": 9}
 
 CURRENCY_MAP = {"AUD": 0, "BRL": 1, "CAD": 2, "EUR": 3, "GBP": 4,
                 "INR": 5, "JPY": 6, "TND": 7, "USD": 8}
@@ -57,7 +58,7 @@ ROLE_MAP = {"Data Scientist": 0, "DevOps Engineer": 1, "Director": 2,
             "Senior Engineer": 10, "Support Specialist": 11}
 
 DEPARTMENT_MAP = {"Engineering": 0, "Finance": 1, "HR": 2,
-                  "IT": 3, "Operations": 4, "Sales": 5}
+                "IT": 3, "Operations": 4, "Sales": 5}
 
 # ─── App Setup ────────────────────────────────────────────────────────────────
 
@@ -108,6 +109,15 @@ def load_model():
 
 model = load_model()
 
+# Load scaler for feature normalization
+SCALER_PATH = os.path.join(MODELS_DIR, "scaler.pkl")
+with open(SCALER_PATH, "rb") as f:
+    scaler_meta = pickle.load(f)
+
+# Handle both old format (scaler only) and new format (dict with metadata)
+scaler = scaler_meta
+
+print("Scaler loaded successfully")
 # SHAP TreeExplainer — created once at startup, reused for all /explain calls
 shap_explainer = shap.TreeExplainer(model)
 
@@ -229,10 +239,10 @@ def encode_record(record: PayrollRecord) -> np.ndarray:
 
     Encoding:
         - Categorical fields (country, currency, role, department) →
-          label encoded using the same mapping as preprocessing.py
+        label encoded using the same mapping as preprocessing.py
         - Numerical fields → passed as-is (model handles raw values
-          since MinMaxScaler was applied during training but feature
-          importance is scale-invariant for Random Forest)
+        since MinMaxScaler was applied during training but feature
+        importance is scale-invariant for Random Forest)
 
     Args:
         record (PayrollRecord): Validated input from the API request.
@@ -242,33 +252,45 @@ def encode_record(record: PayrollRecord) -> np.ndarray:
 
     Raises:
         HTTPException 400: If country, currency, role, or department
-                           is not recognized.
+                        is not recognized.
     """
     # Validate and encode categoricals
     if record.country not in COUNTRY_MAP:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown country '{record.country}'. "
-                   f"Valid values: {list(COUNTRY_MAP.keys())}"
+                f"Valid values: {list(COUNTRY_MAP.keys())}"
         )
     if record.currency not in CURRENCY_MAP:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown currency '{record.currency}'. "
-                   f"Valid values: {list(CURRENCY_MAP.keys())}"
+                f"Valid values: {list(CURRENCY_MAP.keys())}"
         )
     if record.role not in ROLE_MAP:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown role '{record.role}'. "
-                   f"Valid values: {list(ROLE_MAP.keys())}"
+                f"Valid values: {list(ROLE_MAP.keys())}"
         )
     if record.department not in DEPARTMENT_MAP:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown department '{record.department}'. "
-                   f"Valid values: {list(DEPARTMENT_MAP.keys())}"
+                f"Valid values: {list(DEPARTMENT_MAP.keys())}"
         )
+
+    base = record.base_salary
+    tax  = record.tax
+    ss   = record.social_security
+    bon  = record.bonus
+    net  = record.net_pay
+
+    tax_rate             = tax / base if base > 0 else 0
+    net_to_gross_ratio   = net / base if base > 0 else 0
+    bonus_rate           = bon / base if base > 0 else 0
+    ss_rate              = ss / base if base > 0 else 0
+    total_deduction_rate = (tax + ss) / base if base > 0 else 0
 
     features = np.array([[
         COUNTRY_MAP[record.country],
@@ -276,15 +298,20 @@ def encode_record(record: PayrollRecord) -> np.ndarray:
         ROLE_MAP[record.role],
         DEPARTMENT_MAP[record.department],
         record.years_experience,
-        record.base_salary,
-        record.bonus,
-        record.tax,
-        record.social_security,
-        record.net_pay,
+        base,
+        bon,
+        tax,
+        ss,
+        net,
+        tax_rate,
+        net_to_gross_ratio,
+        bonus_rate,
+        ss_rate,
+        total_deduction_rate,
     ]], dtype=float)
-
+    
+    features = scaler.transform(features)
     return features
-
 
 def get_risk_level(score: float) -> str:
     """
