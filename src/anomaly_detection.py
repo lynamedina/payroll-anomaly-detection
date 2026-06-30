@@ -131,7 +131,7 @@ def load_payroll_data(path: str = PAYROLL_PATH):
     Returns:
         tuple: (X_train_resampled, X_test, y_train_resampled, y_test, df, feature_cols)
     """
-    from imblearn.over_sampling import SMOTE
+    #from imblearn.over_sampling import SMOTE
 
     print(f"\nLoading payroll data from: {path}")
     df = pd.read_csv(path)
@@ -144,15 +144,27 @@ def load_payroll_data(path: str = PAYROLL_PATH):
     X = df[feature_cols].values
     y = df["is_anomaly"].values
 
-    # Save scaler for API use
-    from sklearn.preprocessing import MinMaxScaler
+    # Save scaler fitted on RAW data for API use
+    from sklearn.preprocessing import MinMaxScaler, LabelEncoder
     import pickle
+    raw_df = pd.read_csv("../data/synthetic_global_payroll.csv")
+    le = LabelEncoder()
+    for col in ["country", "currency", "role", "department"]:
+        raw_df[col] = le.fit_transform(raw_df[col].astype(str))
+    raw_df["tax_rate"]             = raw_df["tax"] / raw_df["base_salary"].replace(0, np.nan)
+    raw_df["net_to_gross_ratio"]   = raw_df["net_pay"] / raw_df["base_salary"].replace(0, np.nan)
+    raw_df["bonus_rate"]           = raw_df["bonus"] / raw_df["base_salary"].replace(0, np.nan)
+    raw_df["ss_rate"]              = raw_df["social_security"] / raw_df["base_salary"].replace(0, np.nan)
+    raw_df["total_deduction_rate"] = (raw_df["tax"] + raw_df["social_security"]) / raw_df["base_salary"].replace(0, np.nan)
+    ratio_cols = ["tax_rate", "net_to_gross_ratio", "bonus_rate", "ss_rate", "total_deduction_rate"]
+    raw_df[ratio_cols] = raw_df[ratio_cols].replace([np.inf, -np.inf], np.nan).fillna(0)
+    X_raw = raw_df[feature_cols].dropna().values
     scaler = MinMaxScaler()
-    scaler.fit(X)
+    scaler.fit(X_raw)
     with open("../models/scaler.pkl", "wb") as f:
         pickle.dump(scaler, f)
-    print("  Scaler saved → ../models/scaler.pkl")
-
+    print("  Scaler fitted on RAW data → ../models/scaler.pkl")
+    """
     # Split BEFORE resampling — test set must stay original
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
@@ -169,8 +181,16 @@ def load_payroll_data(path: str = PAYROLL_PATH):
         f"Anomaly rate: {y_train.mean():.2%}")
     print(f"  Test set     — {len(X_test):,} rows | "
         f"Anomaly rate: {y_test.mean():.2%}")
+    """
+    # Split into train/test — no SMOTE, using class_weight="balanced" instead
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42, stratify=y
+    )
 
+    print(f"  Train: {len(X_train):,} rows | Anomaly rate: {y_train.mean():.2%}")
+    print(f"  Test set — {len(X_test):,} rows | Anomaly rate: {y_test.mean():.2%}")
     return X_train, X_test, y_train, y_test, df, feature_cols
+
 
 # ─── Model 1: Random Forest ───────────────────────────────────────────────────
 
@@ -220,8 +240,8 @@ def train_random_forest(X_train, X_test, y_train, y_test) -> tuple:
     metrics = print_metrics("Random Forest", y_test, y_pred, y_score)
     save_model(model, "random_forest.pkl")
 
-    return model, y_pred, y_score, metrics
-
+    #return model, y_pred, y_score, metrics
+    return model, y_pred, y_score, metrics, optimal_threshold
 
 # ─── Model 2: Gradient Boosting ───────────────────────────────────────────────
 
@@ -272,7 +292,8 @@ def train_gradient_boosting(X_train, X_test, y_train, y_test) -> tuple:
     metrics = print_metrics("Gradient Boosting", y_test, y_pred, y_score)
     save_model(model, "gradient_boosting.pkl")
 
-    return model, y_pred, y_score, metrics
+    #return model, y_pred, y_score, metrics
+    return model, y_pred, y_score, metrics, optimal_threshold
 
 
 # ─── Model 3: ANN (MLP) ───────────────────────────────────────────────────────
@@ -329,8 +350,8 @@ def train_ann(X_train, X_test, y_train, y_test) -> tuple:
     metrics = print_metrics("ANN (MLP)", y_test, y_pred, y_score)
     save_model(model, "ann.pkl")
 
-    return model, y_pred, y_score, metrics
-
+    #return model, y_pred, y_score, metrics
+    return model, y_pred, y_score, metrics, optimal_threshold
 
 # ─── Model 4: Isolation Forest ────────────────────────────────────────────────
 
@@ -434,7 +455,8 @@ def train_xgboost(X_train, X_test, y_train, y_test) -> tuple:
 
     metrics = print_metrics("XGBoost", y_test, y_pred, y_score)
     save_model(model, "xgboost.pkl")
-    return model, y_pred, y_score, metrics
+    #return model, y_pred, y_score, metrics
+    return model, y_pred, y_score, metrics, optimal_threshold
 
 # ─── Model 6: autoencoder ────────────────────────────────────────────────
 
@@ -581,16 +603,6 @@ def print_summary(results: list) -> None:
 def run_all():
     """
     Runs the full model training and evaluation pipeline.
-
-    Steps:
-        1. Load preprocessed payroll data
-        2. Train Random Forest (supervised)
-        3. Train Gradient Boosting (supervised)
-        4. Train ANN / MLP (supervised)
-        5. Train Isolation Forest (unsupervised)
-        6. Save all models as .pkl files
-        7. Save predictions + ensemble scores to CSV
-        8. Print comparison summary
     """
     print("\n" + "="*60)
     print("  PAYROLL ANOMALY DETECTION — Model Training Pipeline")
@@ -600,12 +612,23 @@ def run_all():
     X_train, X_test, y_train, y_test, df, feature_cols = load_payroll_data()
 
     # Train models
-    rf_model,  rf_pred,  rf_score,  rf_metrics  = train_random_forest(X_train, X_test, y_train, y_test)
-    gb_model,  gb_pred,  gb_score,  gb_metrics  = train_gradient_boosting(X_train, X_test, y_train, y_test)
-    ann_model, ann_pred, ann_score, ann_metrics  = train_ann(X_train, X_test, y_train, y_test)
-    if_model,  if_pred,  if_score,  if_metrics  = train_isolation_forest(X_train, X_test, y_test)
-    xgb_model, xgb_pred, xgb_score, xgb_metrics = train_xgboost(X_train, X_test, y_train, y_test)
-    ae_model,  ae_pred,  ae_score,  ae_metrics  = train_autoencoder(X_train, X_test, y_train, y_test)
+    rf_model,  rf_pred,  rf_score,  rf_metrics,  rf_thresh  = train_random_forest(X_train, X_test, y_train, y_test)
+    gb_model,  gb_pred,  gb_score,  gb_metrics,  gb_thresh  = train_gradient_boosting(X_train, X_test, y_train, y_test)
+    ann_model, ann_pred, ann_score, ann_metrics, ann_thresh  = train_ann(X_train, X_test, y_train, y_test)
+    if_model,  if_pred,  if_score,  if_metrics               = train_isolation_forest(X_train, X_test, y_test)
+    xgb_model, xgb_pred, xgb_score, xgb_metrics, xgb_thresh = train_xgboost(X_train, X_test, y_train, y_test)
+    ae_model,  ae_pred,  ae_score,  ae_metrics               = train_autoencoder(X_train, X_test, y_train, y_test)
+
+    # Save optimal thresholds for evaluation.py
+    thresholds = {
+        "random_forest":     rf_thresh,
+        "gradient_boosting": gb_thresh,
+        "ann":               ann_thresh,
+        "xgboost":           xgb_thresh,
+    }
+    with open(os.path.join(MODELS_DIR, "thresholds.pkl"), "wb") as f:
+        pickle.dump(thresholds, f)
+    print(f"  Thresholds saved → {MODELS_DIR}/thresholds.pkl")
 
     # Save predictions
     save_predictions(df, feature_cols,

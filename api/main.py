@@ -313,7 +313,7 @@ def encode_record(record: PayrollRecord) -> np.ndarray:
     features = scaler.transform(features)
     return features
 
-def get_risk_level(score: float) -> str:
+def get_risk_level(score: float, is_anomaly: bool = False) -> str:
     """
     Converts a continuous anomaly score to a human-readable risk label.
 
@@ -328,12 +328,14 @@ def get_risk_level(score: float) -> str:
     Returns:
         str: "Low", "Medium", or "High"
     """
-    if score < 0.3:
+    if not is_anomaly:
         return "Low"
-    elif score < 0.6:
+    if score < 0.95:
         return "Medium"
-    else:
+    elif score < 0.99:
         return "High"
+    else:
+        return "Critical"
 
 
 def detect_anomaly_indicators(record: PayrollRecord) -> list:
@@ -423,10 +425,11 @@ def predict(record: PayrollRecord):
         PredictionResponse: Prediction result with risk level and message.
     """
     features      = encode_record(record)
-    prediction    = model.predict(features)[0]
-    score         = float(model.predict_proba(features)[0][1])
-    is_anomaly    = bool(prediction == 1)
-    risk_level    = get_risk_level(score)
+    #prediction = model.predict(features)[0]
+    score      = float(model.predict_proba(features)[0][1])
+    is_anomaly = bool(score >= 0.94)
+    prediction = int(is_anomaly)
+    risk_level = get_risk_level(score, is_anomaly)
 
     message = (
         f"Anomaly detected with {score:.1%} confidence. "
@@ -465,17 +468,18 @@ def explain(record: PayrollRecord):
                         + recommended action.
     """
     features   = encode_record(record)
-    prediction = model.predict(features)[0]
+    #prediction = model.predict(features)[0]
     score      = float(model.predict_proba(features)[0][1])
-    is_anomaly = bool(prediction == 1)
-    risk_level = get_risk_level(score)
+    is_anomaly = bool(score >= 0.94)
+    prediction = int(is_anomaly)
+    risk_level = get_risk_level(score, is_anomaly)
 
     # Per-record SHAP contributions (replaces global feature importance)
     feature_scores = get_shap_for_record(features)
 
     # Top 3 features by absolute SHAP impact for THIS record
     sorted_features = sorted(feature_scores.items(),
-                             key=lambda x: abs(x[1]), reverse=True)
+                        key=lambda x: abs(x[1]), reverse=True)
     top_features = [
         {"feature": k, "importance": v, "value": float(features[0][i])}
         for i, (k, v) in enumerate(sorted_features[:3])

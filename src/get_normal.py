@@ -25,7 +25,7 @@
 #score = model.predict_proba(features_scaled)[0][1]
 #print(f'Prediction: {pred} | Score: {score:.4f}')
 
-
+"""
 import requests
 
 # Real normal record from dataset
@@ -49,3 +49,38 @@ print(f"Prediction : {'ANOMALY' if result['is_anomaly'] else 'NORMAL'}")
 print(f"Score      : {result['anomaly_score']}")
 print(f"Risk Level : {result['risk_level']}")
 print(f"Message    : {result['message']}")
+
+import pickle
+with open('../models/thresholds.pkl', 'rb') as f:
+    t = pickle.load(f)
+print(t)
+"""
+
+import pickle, numpy as np, pandas as pd
+from sklearn.metrics import precision_score, recall_score, confusion_matrix
+
+# Load model and test data
+with open('../models/random_forest.pkl', 'rb') as f:
+    model = pickle.load(f)
+with open('../models/thresholds.pkl', 'rb') as f:
+    thresh = pickle.load(f)
+
+df = pd.read_csv('../data/processed/payroll_processed.csv')
+feature_cols = ['country','currency','role','department','years_experience',
+                'base_salary','bonus','tax','social_security','net_pay',
+                'tax_rate','net_to_gross_ratio','bonus_rate','ss_rate','total_deduction_rate']
+from sklearn.model_selection import train_test_split
+X = df[feature_cols].values
+y = df['is_anomaly'].values
+_, X_test, _, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+with open('../models/scaler.pkl', 'rb') as f:
+    scaler = pickle.load(f)
+X_test_scaled = scaler.transform(X_test)
+
+score = model.predict_proba(X_test_scaled)[:, 1]
+pred = (score >= thresh['random_forest']).astype(int)
+print('RF Precision:', precision_score(y_test, pred))
+print('RF Recall:', recall_score(y_test, pred))
+print('Confusion Matrix:')
+print(confusion_matrix(y_test, pred))

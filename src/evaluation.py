@@ -143,7 +143,15 @@ def get_predictions(models: dict, X_test, y_test):
     Returns:
         dict: {model_name: {"pred": array, "score": array}}
     """
-    print("[3/7] Generating predictions...")
+    # Load optimal thresholds
+    import pickle
+    try:
+        with open(os.path.join(MODELS_DIR, "thresholds.pkl"), "rb") as f:
+            thresholds = pickle.load(f)
+    except:
+        thresholds = {}
+        print("  Warning: thresholds.pkl not found, using 0.5")
+
     results = {}
     for name, model in models.items():
         if name == "Isolation Forest":
@@ -152,8 +160,19 @@ def get_predictions(models: dict, X_test, y_test):
             score = -model.score_samples(X_test)
             score = (score - score.min()) / (score.max() - score.min())
         else:
-            pred  = model.predict(X_test)
             score = model.predict_proba(X_test)[:, 1]
+            # Map display name to thresholds.pkl key
+            name_map = {
+                "Random Forest":     "random_forest",
+                "Gradient Boosting": "gradient_boosting",
+                "ANN (MLP)":         "ann",
+                "XGBoost":           "xgboost",
+            }
+            thresh_key = name_map.get(name, name.lower().replace(" ", "_"))
+            thresh = thresholds.get(thresh_key, 0.5)
+            print(f"  {name}: using threshold {thresh:.4f}")
+            pred = (score >= thresh).astype(int)
+
         results[name] = {"pred": pred, "score": score}
         print(f"  {name}: {pred.sum():,} flagged")
     return results
