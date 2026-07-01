@@ -137,19 +137,19 @@ CURRENCIES = {"AU": "AUD", "BR": "BRL", "CA": "CAD", "DE": "EUR",
             "FR": "EUR", "IN": "INR", "JP": "JPY", "TN": "TND",
             "UK": "GBP", "US": "USD"}
 ROLES = ["Data Scientist", "DevOps Engineer", "Director", "Finance Analyst",
-         "HR Manager", "Intern", "Junior Engineer", "Payroll Specialist",
-         "Project Manager", "Sales Manager", "Senior Engineer", "Support Specialist"]
+        "HR Manager", "Intern", "Junior Engineer", "Payroll Specialist",
+        "Project Manager", "Sales Manager", "Senior Engineer", "Support Specialist"]
 DEPARTMENTS = ["Engineering", "Finance", "HR", "IT", "Operations", "Sales"]
 
 MODEL_RESULTS = pd.DataFrame({
     "Model":     ["Random Forest", "Gradient Boosting", "ANN (MLP)",
-                  "Isolation Forest", "XGBoost", "Autoencoder"],
+                "Isolation Forest", "XGBoost", "Autoencoder"],
     "Type":      ["Supervised", "Supervised", "Supervised",
-                  "Unsupervised", "Supervised", "Unsupervised"],
-    "Precision": [1.0000, 1.0000, 1.0000, 0.9611, 1.0000, 0.9948],
-    "Recall":    [0.7118, 0.7118, 0.7118, 0.1465, 0.7118, 0.5670],
-    "F1":        [0.8317, 0.8317, 0.8317, 0.2542, 0.8317, 0.7223],
-    "AUC":       [0.8567, 0.8541, 0.8528, 0.8161, 0.8540, 0.8163],
+                "Unsupervised", "Supervised", "Unsupervised"],
+    "Precision": [1.0000, 1.0000, 1.0000, 0.6354, 0.9997, 0.9833],
+    "Recall":    [0.7118, 0.7118, 0.7114, 0.7159, 0.7118, 0.6299],
+    "F1":        [0.8317, 0.8317, 0.8314, 0.6732, 0.8316, 0.7679],
+    "AUC":       [0.8583, 0.8546, 0.8529, 0.8511, 0.8554, 0.8494],
 })
 
 # ─── Data Loading ─────────────────────────────────────────────────────────────
@@ -178,11 +178,12 @@ with st.sidebar:
     st.markdown("## 🔍 ADP Anomaly Detection")
     st.markdown("---")
     page = st.radio(
-        "Navigation",
-        ["📊 Overview", "👤 Employee Check", "📂 Bulk Scan",
-        "🤖 Model Comparison", "📋 Data Explorer"],
-        label_visibility="collapsed"
+    "Navigation",
+    ["📊 Overview", "👤 Employee Check", "📂 Bulk Scan",
+    "🤖 Model Comparison", "📋 Data Explorer", "🗄️ Employee Management"],
+    label_visibility="collapsed"
     )
+    
     st.markdown("---")
     st.markdown("**API Status**")
     try:
@@ -243,10 +244,10 @@ if page == "📊 Overview":
         st.markdown('<p class="section-header">Anomalies by Country</p>', unsafe_allow_html=True)
         country_data = df[df["is_anomaly"] == 1].groupby("country").size().reset_index(name="count")
         fig = px.bar(country_data, x="count", y="country", orientation="h",
-                     color="count", color_continuous_scale="Blues",
-                     template="plotly_dark")
+                    color="count", color_continuous_scale="Blues",
+                    template="plotly_dark")
         fig.update_layout(showlegend=False, coloraxis_showscale=False,
-                          margin=dict(l=0, r=0, t=0, b=0), height=300)
+                        margin=dict(l=0, r=0, t=0, b=0), height=300)
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -254,8 +255,8 @@ if page == "📊 Overview":
         type_data = df[df["anomaly_type"] != "none"]["anomaly_type"].value_counts().reset_index()
         type_data.columns = ["type", "count"]
         fig = px.pie(type_data, values="count", names="type",
-                     color_discrete_sequence=px.colors.qualitative.Set3,
-                     template="plotly_dark", hole=0.3)
+                    color_discrete_sequence=px.colors.qualitative.Set3,
+                    template="plotly_dark", hole=0.3)
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=300)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -267,20 +268,20 @@ if page == "📊 Overview":
         if "pay_month" in df.columns:
             trend = df[df["is_anomaly"] == 1].groupby("pay_month").size().reset_index(name="anomalies")
             fig = px.line(trend, x="pay_month", y="anomalies",
-                          markers=True, template="plotly_dark",
-                          color_discrete_sequence=["#4fc3f7"])
+                        markers=True, template="plotly_dark",
+                        color_discrete_sequence=["#4fc3f7"])
             fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=280,
-                              xaxis_title="Month", yaxis_title="Anomalies")
+                            xaxis_title="Month", yaxis_title="Anomalies")
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         st.markdown('<p class="section-header">Average Salary by Role</p>', unsafe_allow_html=True)
         role_data = df.groupby("role")["base_salary"].mean().sort_values(ascending=True).reset_index()
         fig = px.bar(role_data, x="base_salary", y="role", orientation="h",
-                     color="base_salary", color_continuous_scale="Teal",
-                     template="plotly_dark")
+                    color="base_salary", color_continuous_scale="Teal",
+                    template="plotly_dark")
         fig.update_layout(showlegend=False, coloraxis_showscale=False,
-                          margin=dict(l=0, r=0, t=0, b=0), height=280)
+                        margin=dict(l=0, r=0, t=0, b=0), height=280)
         st.plotly_chart(fig, use_container_width=True)
 
 
@@ -483,8 +484,8 @@ elif page == "📂 Bulk Scan":
                     })
                 except Exception as e:
                     results.append({"employee_id": str(row.get("employee_id", i)),
-                                   "is_anomaly": None, "anomaly_score": None,
-                                   "risk_level": "Error", "message": str(e)})
+                                "is_anomaly": None, "anomaly_score": None,
+                                "risk_level": "Error", "message": str(e)})
 
                 progress.progress((i + 1) / len(df_upload))
                 status.text(f"Scanning record {i+1} of {len(df_upload)}...")
@@ -536,18 +537,19 @@ elif page == "🤖 Model Comparison":
     with col1:
         st.markdown('<p class="section-header">F1 Score by Model</p>', unsafe_allow_html=True)
         fig = px.bar(MODEL_RESULTS, x="Model", y="F1",
-                     color="Type", barmode="group",
-                     color_discrete_map={"Supervised": "#4fc3f7", "Unsupervised": "#ff9800"},
-                     template="plotly_dark")
+                    color="Type", barmode="group",
+                    color_discrete_map={"Supervised": "#4fc3f7", "Unsupervised": "#ff9800"},
+                    template="plotly_dark")
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=300)
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
         st.markdown('<p class="section-header">Precision vs Recall</p>', unsafe_allow_html=True)
         fig = px.scatter(MODEL_RESULTS, x="Recall", y="Precision",
-                         text="Model", size="AUC", color="Type",
-                         color_discrete_map={"Supervised": "#4fc3f7", "Unsupervised": "#ff9800"},
-                         template="plotly_dark")
+                text="Model", size="AUC", color="Type",
+                color_discrete_map={"Supervised": "#4fc3f7", "Unsupervised": "#ff9800"},
+                template="plotly_dark",
+                size_max=40)
         fig.update_traces(textposition="top center")
         fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=300)
         st.plotly_chart(fig, use_container_width=True)
@@ -624,3 +626,266 @@ elif page == "📋 Data Explorer":
         "⬇️ Download Filtered Data",
         csv, "filtered_payroll.csv", "text/csv"
     )
+    
+    # ══════════════════════════════════════════════════════════════════════════════
+# PAGE 6 — EMPLOYEE MANAGEMENT (CRUD)
+# ══════════════════════════════════════════════════════════════════════════════
+
+elif page == "🗄️ Employee Management":
+    import sqlite3
+
+    st.markdown("# 🗄️ Employee Management")
+    st.markdown("Create, view, update and delete employee records. Anomaly detection runs automatically on save.")
+    st.markdown("---")
+
+    # ── Database setup ────────────────────────────────────────────────────────
+    DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "payroll.db")
+
+    def get_connection():
+        return sqlite3.connect(DB_PATH)
+
+    def init_db():
+        with get_connection() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS employees (
+                    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                    employee_id     TEXT    NOT NULL UNIQUE,
+                    country         TEXT    NOT NULL,
+                    currency        TEXT    NOT NULL,
+                    role            TEXT    NOT NULL,
+                    department      TEXT    NOT NULL,
+                    years_experience REAL   NOT NULL,
+                    base_salary     REAL    NOT NULL,
+                    bonus           REAL    NOT NULL,
+                    tax             REAL    NOT NULL,
+                    social_security REAL    NOT NULL,
+                    net_pay         REAL    NOT NULL,
+                    is_anomaly      INTEGER,
+                    anomaly_score   REAL,
+                    risk_level      TEXT,
+                    created_at      TEXT    DEFAULT (datetime('now')),
+                    updated_at      TEXT    DEFAULT (datetime('now'))
+                )
+            """)
+            conn.commit()
+
+    def load_employees():
+        with get_connection() as conn:
+            return pd.read_sql("SELECT * FROM employees ORDER BY created_at DESC", conn)
+
+    def run_detection(payload):
+        """Call /predict API and return result dict."""
+        try:
+            r = requests.post(f"{API_URL}/predict", json=payload, timeout=10)
+            return r.json()
+        except Exception as e:
+            return {"is_anomaly": None, "anomaly_score": None, "risk_level": "Error"}
+
+    init_db()
+
+    # ── Tabs ─────────────────────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4 = st.tabs(["➕ Add Employee", "📋 View All", "✏️ Edit Employee", "🗑️ Delete Employee"])
+
+    # ────────────────────────────────────────────────────────────────────────
+    # TAB 1 — CREATE
+    # ────────────────────────────────────────────────────────────────────────
+    with tab1:
+        st.markdown("### Add New Employee")
+        st.markdown("Fill in the payroll details. Anomaly detection runs automatically on save.")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            new_id      = st.text_input("Employee ID", value="EMP_NEW_001", key="new_id")
+            new_country = st.selectbox("Country", COUNTRIES, key="new_country")
+            new_currency = CURRENCIES.get(new_country, "USD")
+            st.text_input("Currency", value=new_currency, disabled=True)
+            new_role    = st.selectbox("Role", ROLES, key="new_role")
+            new_dept    = st.selectbox("Department", DEPARTMENTS, key="new_dept")
+            new_exp     = st.slider("Years of Experience", 0.0, 30.0, 5.0, 0.5, key="new_exp")
+
+        with col2:
+            new_salary  = st.number_input("Base Salary",      min_value=0.0, value=75000.0,  step=1000.0, key="new_salary")
+            new_bonus   = st.number_input("Bonus",             min_value=0.0, value=5000.0,   step=500.0,  key="new_bonus")
+            new_tax     = st.number_input("Tax Deducted",      min_value=0.0, value=18000.0,  step=500.0,  key="new_tax")
+            new_ss      = st.number_input("Social Security",   min_value=0.0, value=7000.0,   step=500.0,  key="new_ss")
+            new_net     = st.number_input("Net Pay",           min_value=0.0, value=52000.0,  step=1000.0, key="new_net")
+
+        if st.button("💾 Save & Run Detection", type="primary", use_container_width=True):
+            payload = {
+                "employee_id": new_id, "country": new_country,
+                "currency": new_currency, "role": new_role,
+                "department": new_dept, "years_experience": new_exp,
+                "base_salary": new_salary, "bonus": new_bonus,
+                "tax": new_tax, "social_security": new_ss, "net_pay": new_net
+            }
+            detection = run_detection(payload)
+
+            try:
+                with get_connection() as conn:
+                    conn.execute("""
+                        INSERT INTO employees
+                        (employee_id, country, currency, role, department,
+                         years_experience, base_salary, bonus, tax, social_security,
+                         net_pay, is_anomaly, anomaly_score, risk_level)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, (
+                        new_id, new_country, new_currency, new_role, new_dept,
+                        new_exp, new_salary, new_bonus, new_tax, new_ss, new_net,
+                        int(detection.get("is_anomaly") or 0),
+                        detection.get("anomaly_score"),
+                        detection.get("risk_level")
+                    ))
+                    conn.commit()
+
+                if detection.get("is_anomaly"):
+                    st.error(f"⚠️ Employee saved — **ANOMALY DETECTED** | Score: {detection.get('anomaly_score', 'N/A')} | Risk: {detection.get('risk_level')}")
+                else:
+                    st.success(f"✅ Employee saved — **NORMAL RECORD** | Score: {detection.get('anomaly_score', 'N/A')} | Risk: {detection.get('risk_level')}")
+
+            except sqlite3.IntegrityError:
+                st.error(f"❌ Employee ID '{new_id}' already exists. Use a unique ID.")
+            except Exception as e:
+                st.error(f"❌ Error saving: {e}")
+
+    # ────────────────────────────────────────────────────────────────────────
+    # TAB 2 — READ
+    # ────────────────────────────────────────────────────────────────────────
+    with tab2:
+        st.markdown("### All Employees in Database")
+        employees_df = load_employees()
+
+        if employees_df.empty:
+            st.info("No employees in the database yet. Add some in the ➕ Add Employee tab.")
+        else:
+            # KPIs
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Employees", len(employees_df))
+            with col2:
+                anomaly_count = employees_df["is_anomaly"].sum() if "is_anomaly" in employees_df else 0
+                st.metric("Anomalies", int(anomaly_count))
+            with col3:
+                rate = (anomaly_count / len(employees_df) * 100) if len(employees_df) > 0 else 0
+                st.metric("Anomaly Rate", f"{rate:.1f}%")
+
+            # Color-code risk level
+            def color_risk(val):
+                if val == "Critical": return "color: #ff0000; font-weight: bold"
+                if val == "High":     return "color: #ff4d4d; font-weight: bold"
+                if val == "Medium":   return "color: #ffa726; font-weight: bold"
+                if val == "Low":      return "color: #00c853; font-weight: bold"
+                return ""
+
+            display_cols = ["employee_id", "country", "role", "department",
+                           "base_salary", "net_pay", "is_anomaly", "anomaly_score", "risk_level", "created_at"]
+            st.dataframe(
+                employees_df[display_cols].style.applymap(color_risk, subset=["risk_level"]),
+                use_container_width=True, height=400
+            )
+
+            # Download
+            csv = employees_df.to_csv(index=False).encode("utf-8")
+            st.download_button("⬇️ Download All Records", csv, "employees_db.csv", "text/csv")
+
+    # ────────────────────────────────────────────────────────────────────────
+    # TAB 3 — UPDATE
+    # ────────────────────────────────────────────────────────────────────────
+    with tab3:
+        st.markdown("### Edit Employee Record")
+        employees_df = load_employees()
+
+        if employees_df.empty:
+            st.info("No employees to edit yet.")
+        else:
+            emp_ids  = employees_df["employee_id"].tolist()
+            selected = st.selectbox("Select Employee to Edit", emp_ids, key="edit_select")
+            emp_row  = employees_df[employees_df["employee_id"] == selected].iloc[0]
+
+            col1, col2 = st.columns(2)
+            with col1:
+                edit_country = st.selectbox("Country", COUNTRIES,
+                    index=COUNTRIES.index(emp_row["country"]) if emp_row["country"] in COUNTRIES else 0,
+                    key="edit_country")
+                edit_currency = CURRENCIES.get(edit_country, "USD")
+                st.text_input("Currency", value=edit_currency, disabled=True)
+                edit_role = st.selectbox("Role", ROLES,
+                    index=ROLES.index(emp_row["role"]) if emp_row["role"] in ROLES else 0,
+                    key="edit_role")
+                edit_dept = st.selectbox("Department", DEPARTMENTS,
+                    index=DEPARTMENTS.index(emp_row["department"]) if emp_row["department"] in DEPARTMENTS else 0,
+                    key="edit_dept")
+                edit_exp = st.slider("Years of Experience", 0.0, 30.0,
+                    float(emp_row["years_experience"]), 0.5, key="edit_exp")
+
+            with col2:
+                edit_salary = st.number_input("Base Salary",    min_value=0.0, value=float(emp_row["base_salary"]),  step=1000.0, key="edit_salary")
+                edit_bonus  = st.number_input("Bonus",           min_value=0.0, value=float(emp_row["bonus"]),        step=500.0,  key="edit_bonus")
+                edit_tax    = st.number_input("Tax Deducted",    min_value=0.0, value=float(emp_row["tax"]),          step=500.0,  key="edit_tax")
+                edit_ss     = st.number_input("Social Security", min_value=0.0, value=float(emp_row["social_security"]), step=500.0, key="edit_ss")
+                edit_net    = st.number_input("Net Pay",         min_value=0.0, value=float(emp_row["net_pay"]),      step=1000.0, key="edit_net")
+
+            if st.button("🔄 Update & Re-run Detection", type="primary", use_container_width=True):
+                payload = {
+                    "employee_id": selected, "country": edit_country,
+                    "currency": edit_currency, "role": edit_role,
+                    "department": edit_dept, "years_experience": edit_exp,
+                    "base_salary": edit_salary, "bonus": edit_bonus,
+                    "tax": edit_tax, "social_security": edit_ss, "net_pay": edit_net
+                }
+                detection = run_detection(payload)
+
+                with get_connection() as conn:
+                    conn.execute("""
+                        UPDATE employees SET
+                            country=?, currency=?, role=?, department=?,
+                            years_experience=?, base_salary=?, bonus=?,
+                            tax=?, social_security=?, net_pay=?,
+                            is_anomaly=?, anomaly_score=?, risk_level=?,
+                            updated_at=datetime('now')
+                        WHERE employee_id=?
+                    """, (
+                        edit_country, edit_currency, edit_role, edit_dept,
+                        edit_exp, edit_salary, edit_bonus, edit_tax, edit_ss, edit_net,
+                        int(detection.get("is_anomaly") or 0),
+                        detection.get("anomaly_score"),
+                        detection.get("risk_level"),
+                        selected
+                    ))
+                    conn.commit()
+
+                if detection.get("is_anomaly"):
+                    st.error(f"⚠️ Updated — **ANOMALY DETECTED** | Score: {detection.get('anomaly_score')} | Risk: {detection.get('risk_level')}")
+                else:
+                    st.success(f"✅ Updated — **NORMAL RECORD** | Score: {detection.get('anomaly_score')} | Risk: {detection.get('risk_level')}")
+
+    # ────────────────────────────────────────────────────────────────────────
+    # TAB 4 — DELETE
+    # ────────────────────────────────────────────────────────────────────────
+    with tab4:
+        st.markdown("### Delete Employee Record")
+        employees_df = load_employees()
+
+        if employees_df.empty:
+            st.info("No employees to delete yet.")
+        else:
+            del_id = st.selectbox("Select Employee to Delete", employees_df["employee_id"].tolist(), key="del_select")
+            emp_row = employees_df[employees_df["employee_id"] == del_id].iloc[0]
+
+            st.markdown("**Record to be deleted:**")
+            st.dataframe(
+                pd.DataFrame([emp_row[["employee_id","country","role","department","base_salary","net_pay","risk_level"]]]),
+                use_container_width=True
+            )
+
+            st.warning(f"⚠️ This will permanently delete employee **{del_id}** from the database.")
+
+            col1, col2 = st.columns(2)
+            with col1:
+                confirm = st.checkbox("I confirm I want to delete this record")
+            with col2:
+                if st.button("🗑️ Delete Employee", type="primary", use_container_width=True, disabled=not confirm):
+                    with get_connection() as conn:
+                        conn.execute("DELETE FROM employees WHERE employee_id=?", (del_id,))
+                        conn.commit()
+                    st.success(f"✅ Employee {del_id} deleted successfully.")
+                    st.rerun()

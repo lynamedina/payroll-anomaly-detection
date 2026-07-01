@@ -27,7 +27,9 @@ FIGURES_DIR   = "../reports/figures"
 
 FEATURE_COLS = ["country", "currency", "role", "department",
                 "years_experience", "base_salary", "bonus",
-                "tax", "social_security", "net_pay"]
+                "tax", "social_security", "net_pay",
+                "tax_rate", "net_to_gross_ratio", "bonus_rate",
+                "ss_rate", "total_deduction_rate"]
 
 os.makedirs(FIGURES_DIR, exist_ok=True)
 
@@ -67,16 +69,19 @@ def main():
     print("Loading model and data...")
     with open(os.path.join(MODELS_DIR, "random_forest.pkl"), "rb") as f:
         model = pickle.load(f)
-
+    with open(os.path.join(MODELS_DIR, "scaler.pkl"), "rb") as f:
+        scaler = pickle.load(f)
+        
     df = pd.read_csv(os.path.join(PROCESSED_DIR, "payroll_processed.csv"))
 
     # Sample for global summary plot (SHAP is slow on full 500k rows)
     sample = df.sample(100, random_state=42)
     X_sample = sample[FEATURE_COLS].values
+    X_sample = scaler.transform(X_sample)
 
     print("Computing SHAP values (TreeExplainer)...")
     explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(X_sample)
+    shap_values = explainer.shap_values(X_sample, check_additivity=False)
     sv, base_value = get_class1_shap(shap_values, explainer.expected_value)
 
     # ─── Global Summary Plot ───────────────────────────────────────────────
@@ -95,8 +100,9 @@ def main():
     anomalies = df[df["is_anomaly"] == 1]
     record = anomalies.iloc[0]
     X_record = record[FEATURE_COLS].values.reshape(1, -1)
+    X_record = scaler.transform(X_record)
 
-    record_shap = explainer.shap_values(X_record)
+    record_shap = explainer.shap_values(X_record, check_additivity=False)
     sv_record, base_record = get_class1_shap(record_shap, explainer.expected_value)
 
     plt.figure(figsize=(9, 6))
